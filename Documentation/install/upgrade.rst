@@ -317,6 +317,17 @@ Annotations:
    upgrade. Connections should successfully re-establish without requiring
    clients to reconnect.
 
+.. _1.9_upgrade_notes:
+
+1.9 Upgrade Notes
+-----------------
+
+New Metrics
+~~~~~~~~~~~
+
+  * ``cilium_kvstore_quorum_errors_total`` counts the number of kvstore quorum
+    loss errors. The label ``error`` indicates the type of error.
+
 .. _1.8_upgrade_notes:
 
 1.8 Upgrade Notes
