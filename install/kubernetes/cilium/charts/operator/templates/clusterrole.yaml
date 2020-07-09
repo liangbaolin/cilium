@@ -57,6 +57,7 @@ rules:
   - get
   - list
   - watch
+{{- if or (ge .Capabilities.KubeVersion.Minor "14") (gt .Capabilities.KubeVersion.Major "1") }}
 - apiGroups:
   - coordination.k8s.io
   resources:
@@ -65,3 +66,17 @@ rules:
   - leases
   verbs:
   - '*'
+{{- end }}
+{{- if and (lt .Capabilities.KubeVersion.Minor "14") (eq .Capabilities.KubeVersion.Major "1") }}
+- apiGroups:
+  - ""
+  resources:
+  # To be used when operator HA mode fallbacks to the use of ConfigMapLock
+  # instead of LeasesLock due to lack of support for coordination.k8s.io
+  # API Group.
+  - configmaps
+  verbs:
+  - create
+  - get
+  - update
+{{- end }}

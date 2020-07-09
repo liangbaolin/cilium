@@ -54,6 +54,10 @@ type ServerCapabilities struct {
 	// EndpointSlice is the ability of k8s server to support endpoint slices
 	EndpointSlice bool
 
+	// LeasesResourceLock is the ability of K8S server to support Lease type
+	// from CoordinationV1 API for leader election purposes.
+	LeasesResourceLock bool
+
 	// FieldTypeInCRDSchema is set to true if Kubernetes supports having
 	// the field Type set in the CRD Schema.
 	FieldTypeInCRDSchema bool
@@ -74,8 +78,10 @@ const (
 var (
 	cached = cachedVersion{}
 
-	discoveryAPIGroup = "discovery.k8s.io/v1beta1"
-	endpointSliceKind = "EndpointSlice"
+	discoveryAPIGroup      = "discovery.k8s.io/v1beta1"
+	coordinationV1APIGroup = "coordination.k8s.io/v1"
+	endpointSliceKind      = "EndpointSlice"
+	leaseKind              = "Lease"
 
 	isGEThanPatchConstraint        = versioncheck.MustCompile(">=1.13.0")
 	isGEThanUpdateStatusConstraint = versioncheck.MustCompile(">=1.11.0")
@@ -119,13 +125,28 @@ func updateServerGroupsAndResources(apiGroups []*metav1.APIGroup, apiResourceLis
 	defer cached.mutex.Unlock()
 
 	cached.capabilities.EndpointSlice = false
+	cached.capabilities.LeasesResourceLock = false
 	for _, rscList := range apiResourceLists {
 		if rscList.GroupVersion == discoveryAPIGroup {
 			for _, rsc := range rscList.APIResources {
 				if rsc.Kind == endpointSliceKind {
 					cached.capabilities.EndpointSlice = true
+					break
 				}
 			}
+		}
+
+		if rscList.GroupVersion == coordinationV1APIGroup {
+			for _, rsc := range rscList.APIResources {
+				if rsc.Kind == leaseKind {
+					cached.capabilities.LeasesResourceLock = true
+					break
+				}
+			}
+		}
+
+		if cached.capabilities.LeasesResourceLock && cached.capabilities.EndpointSlice {
+			break
 		}
 	}
 }

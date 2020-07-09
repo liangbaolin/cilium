@@ -162,7 +162,9 @@ func runOperator() {
 	close(k8sInitDone)
 
 	k8sversion.Update(k8s.Client(), option.Config)
-	if !k8sversion.Capabilities().MinimalVersionMet {
+	capabilities := k8sversion.Capabilities()
+
+	if !capabilities.MinimalVersionMet {
 		log.Fatalf("Minimal kubernetes version not met: %s < %s",
 			k8sversion.Version(), k8sversion.MinimalVersionConstraint)
 	}
@@ -182,16 +184,35 @@ func runOperator() {
 		ns = metav1.NamespaceDefault
 	}
 
-	leaseLock := &resourcelock.LeaseLock{
-		LeaseMeta: metav1.ObjectMeta{
-			Name:      leaderElectionLeaseLockName,
-			Namespace: ns,
-		},
-		Client: k8s.Client().CoordinationV1(),
-		LockConfig: resourcelock.ResourceLockConfig{
-			// Identity name of the holder
-			Identity: operatorID,
-		},
+	var leaseLock resourcelock.Interface
+	lockMeta := metav1.ObjectMeta{
+		Name:      leaderElectionLeaseLockName,
+		Namespace: ns,
+	}
+	lockCfg := resourcelock.ResourceLockConfig{
+		// Identity name of the lock holder
+		Identity: operatorID,
+	}
+
+	// If the K8S version has support for coordination.k8s.io/v1 use LeasesResourceLock
+	// for resourcelock config else fallback to ConfigMapResourceLock.
+	//
+	// LeasesResourceLock type is preferred because edits to Leases are less common
+	// and fewer objects in the cluster watch "all Leases". But using ConfigMapResourceLock
+	// or EndpointResourceLock will bring out the same results for earlier versions of
+	// Kubernetes.
+	if capabilities.LeasesResourceLock {
+		leaseLock = &resourcelock.LeaseLock{
+			LeaseMeta:  lockMeta,
+			Client:     k8s.Client().CoordinationV1(),
+			LockConfig: lockCfg,
+		}
+	} else {
+		leaseLock = &resourcelock.ConfigMapLock{
+			ConfigMapMeta: lockMeta,
+			Client:        k8s.Client().CoreV1(),
+			LockConfig:    lockCfg,
+		}
 	}
 
 	// Start the leader election for running cilium-operators
